@@ -1,0 +1,3 @@
+[submodule "Trajectron-plus-plus"]
+	path = src/Trajectron-plus-plus
+	url = git@github.com:cog-rob-spring-2020/Trajectron-plus-plus.git
