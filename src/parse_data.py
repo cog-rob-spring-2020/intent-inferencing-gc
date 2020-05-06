@@ -6,51 +6,173 @@ Author: Abbie Lee (abbielee@mit.edu)
 """
 
 import json
+import os
 
-def to_dicts(fname, id = 0, frame = 0):
-    f = open(fname, mode='r')
+class Agent:
+    def __init__(self, fpath, labels = None):
+        """
+        fname: filepath to .txt for this agent
+        labels: data labels from .txt
+        """
+        self.fpath = fpath
+        self.fname = os.path.basename(self.fpath)
 
-    labels = []
-    timestamped_dicts = []
+        self.ID = None
+        self.set_id()
 
-    for line in f:
-        if len(labels) == 0:
-            dividers = [i for i, char in enumerate(line) if char == "|"]
-            dividers = [-2] + dividers
-            labels = [line[dividers[i]+2:dividers[i+1]-1] for i in range(len(dividers)-1)]
-            continue
+        self.labels = labels
+        if self.labels == None: self.set_labels()
 
-        ts_dict = {"timestamp": None, "object_list": [], "frame": frame, "size": 0}
+        # Maps frame number to (agent data dict, timestamp) tuple
+        self.frames = {}
 
-        dividers = [i for i, char in enumerate(line) if char == "|"]
-        dividers = [-2] + dividers
-        elements = [line[dividers[i]+2:dividers[i+1]-1] for i in range(2)]
+        self.process_file()
 
-        ts_dict["timestamp"] = round(float(elements[0]), 2)
+    def set_id(self):
+        """
+        Extracts id of agent from file name.
+        """
+        idx = self.fname.find(".txt")
+        self.ID = int(''.join([c for c in self.fname[:idx] if c.isdigit()]))
 
-        new_obj = {"position": [], "id": id}
-        pos = [round(float(e), 2) for e in elements[1].split(',')]
-        new_obj["position"] = pos[:2]
+    def set_labels(self):
+        f = open(self.fpath, mode='r')
+        line = f.readline().rstrip()
+        self.labels = line.split(" | ")
 
-        ts_dict["object_list"].append(new_obj)
+    def __equal__(self, other):
+        if self.ID == other.ID:
+            return True
+        return False
 
-        ts_dict["size"] = len(ts_dict["object_list"])
+    def __repr__(self):
+        return "Agent ID: " + str(self.ID)
 
-        timestamped_dicts.append(ts_dict)
+    def process_file(self):
+        """
+        Currently only works with this label structure:
 
-    return timestamped_dicts
+        ["frame", "timestamp", "position", "velocity", "heading", \
+                  "angular velocity", "acceleration", "light status"]
 
-def dict_to_json(ts_dicts, out_path):
-    counter = 1
-    for d in ts_dicts:
-        with open(out_path + str(counter) + ".json", mode="w") as json_file:
-            json.dump(d, json_file)
-        counter += 1
+        Should make more generalizable later. If possible? Might not be.
+        """
+        with open(self.fpath, mode='r') as f:
+            next(f) # skip header row
+            for line in f:
+                elements = line.split(" | ")
 
-if __name__=="__main__":
-    data_path = "data/raw/"
-    out_path = "data/CARLA_dataset/data/"
-    file = "myrecording.txt"
+                frame = int(elements[0])
+                timestamp = round(float(elements[1]), 2)
 
-    ts_dicts = to_dicts(data_path + file)
-    dict_to_json(ts_dicts, out_path)
+                pos = [round(float(e), 2) for e in elements[2].split(',')]
+                vel = [round(float(e), 2) for e in elements[3].split(',')]
+                heading = float(elements[4])
+                angvel = [round(float(e), 2) for e in elements[5].split(',')]
+                accel = [round(float(e), 2) for e in elements[6].split(',')]
+
+                light = [int(e) for e in elements[7].split(',')]
+
+                # 2D world representation
+                agent_dict = {}
+                agent_dict["position"] = pos[:2]
+                agent_dict["velocity"] = vel[:2]
+                agent_dict["heading"] = heading
+                agent_dict["angular velocity"] = angvel[2] # only z component (yaw rate)
+                agent_dict["acceleration"] = accel[:2]
+                agent_dict["light status"] = {"stopped": light[0], "lightID": light[1]}
+
+                # Add data to frame
+                self.frames[frame] = (agent_dict, timestamp)
+
+    def to_dict(self, frameID):
+        """
+        Returns agent state dict for a given frame ID.
+        """
+        return self.frames[frameID][0]
+
+class Frame:
+    def __init__(self, frameID, timestamp):
+        self.frameID = frameID
+        self.agents = {} # active agents in this frame; maps agentID to Agent object
+        self.timestamp = timestamp
+        self.size = 0
+
+    def add_agent(self, agent):
+        if agent.ID not in self.agents.keys():
+            self.agents[agent.ID] = agent
+            self.size += 1
+
+    def __equal__(self, other):
+        if self.frameID == other.frameID:
+            return True
+        return False
+
+    def __repr__(self,):
+        return "Frame ID: " + str(self.frameID) + ", Timestamp: " + str(self.timestamp)
+
+    def to_dict(self):
+        agents = [a.to_dict(self.frameID) for a in self.agents.values()]
+        frame_dict = {"timestamp": self.timestamp, "object_list": agents, \
+                      "frame": self.frameID, "size": self.size}
+        return frame_dict
+
+class MultiAgentScene:
+    def __init__(self, dirpath, labels = None):
+        self.dirpath = dirpath
+        self.labels = labels
+        self.agents = [] # all the agents in this scene
+        self.frames = {} # maps frame ID to Frame objects
+        self.size = len(self.frames)
+        self.gen_scene()
+
+    def gen_scene(self):
+        """
+        Iterates over .txt files and populations MultiAgentScene with relevant
+        Frames, and populates Frames with relevant Agents.
+        """
+        directory = os.fsencode(self.dirpath)
+
+        # Create agents
+        for file in os.listdir(directory):
+             filename = os.fsdecode(file)
+             if filename.endswith(".txt"):
+                 new_agent = Agent(self.dirpath+filename, self.labels)
+                 self.agents.append(new_agent)
+
+        # create frames
+        for ag in self.agents:
+            for fr, data in ag.frames.items():
+                ag_dict = data[0]
+                timestamp = data[1]
+                if fr in self.frames.keys():
+                    self.frames[fr].add_agent(ag)
+                else:
+                    new_frame = Frame(fr, timestamp)
+                    new_frame.add_agent(ag)
+                    self.frames[fr] = new_frame
+
+        self.size = len(self.frames)
+
+    def to_json_dataset(self, outpath):
+        """
+        Writes .json files for this scene to the specified outpath.
+        """
+        counter = 1
+        frames = sorted(self.frames.values(), key = lambda f : f.frameID)
+        for fr in frames:
+            with open(outpath + str(counter) + ".json", mode="w") as json_file:
+                json.dump(fr.to_dict(), json_file)
+            counter += 1
+
+if __name__ == "__main__":
+    # TODO(abbielee): add cmd line args for datapaths
+    data_path = "data/carla2_raw/"
+    out_path = "datasets/CARLA2/data/"
+
+    labels = ["frame", "timestamp", "position", "velocity", "heading", \
+              "angular velocity", "acceleration", "light status"]
+
+    MAS = MultiAgentScene(data_path, labels)
+    print(MAS.size)
+    MAS.to_json_dataset(out_path)
