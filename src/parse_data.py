@@ -81,6 +81,7 @@ class Agent:
                 agent_dict["angular velocity"] = angvel[2] # only z component (yaw rate)
                 agent_dict["acceleration"] = accel[:2]
                 agent_dict["light status"] = {"stopped": light[0], "lightID": light[1]}
+                agent_dict["id"] = self.ID
 
                 # Add data to frame
                 self.frames[frame] = (agent_dict, timestamp)
