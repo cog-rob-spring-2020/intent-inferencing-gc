@@ -167,12 +167,11 @@ class MultiAgentScene:
 
 if __name__ == "__main__":
     # TODO(abbielee): add cmd line args for datapaths
-    data_path = "data/carla2_raw/"
-    out_path = "datasets/CARLA2/data/"
+    data_path = "data/carla3_raw/"
+    out_path = "datasets/CARLA3/data/"
 
     labels = ["frame", "timestamp", "position", "velocity", "heading", \
               "angular velocity", "acceleration", "light status"]
 
     MAS = MultiAgentScene(data_path, labels)
-    print(MAS.size)
     MAS.to_json_dataset(out_path)
