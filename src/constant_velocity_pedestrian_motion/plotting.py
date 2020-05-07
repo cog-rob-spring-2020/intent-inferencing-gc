@@ -39,6 +39,3 @@ def plotting(trajectories):
     plt.show()
     # plt.savefig(os.path.join(output_folder, "{}-{}.png".format(batch_id, j)), bbox_inches='tight', pad_inches=0)
     # plt.close()
-
-def gen_plots(trajectories):
-    pass
