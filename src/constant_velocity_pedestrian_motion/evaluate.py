@@ -20,6 +20,7 @@ class RunConfig:
     sample_angle_std = 25
 
     make_plot = False
+    use_angvel = False # considers angular velocity in calculation
 
     dataset_paths = [
                      "./data/eth_univ"]
@@ -39,11 +40,12 @@ def rel_to_abs(rel_traj, start_pos):
     abs_traj = displacement + start_pos
     return abs_traj.permute(1, 0, 2)
 
-def constant_velocity_model(observed, sample=False):
+def constant_velocity_model(observed, angvels=None, sample=False):
     """
     CVM can be run with or without sampling. A call to this function always
     generates one sample if sample option is true.
     """
+    print("Angvels:", angvels)
     obs_rel = observed[1:] - observed[:-1]
     deltas = obs_rel[-1].unsqueeze(0)
     if sample:
@@ -71,10 +73,17 @@ def evaluate_testset(testset):
             # print("batch X", batch_x)
             # print("batch Y", batch_y)
             # print("-----------------")
-            observed = batch_x.permute(1, 0, 2)
+            obs_pos, obs_angvels = batch_x
+            observed = obs_pos.permute(1, 0, 2)
             history = observed.permute(1, 0, 2)
+            angvels = obs_angvels.permute(1, 0)
             y_true_rel, masks = batch_y
             y_true_rel = y_true_rel.permute(1, 0, 2)
+
+            # print("Obs_pos size:", obs_pos.size())
+            # print("Observed size:", observed.size())
+            # print("History size:", history.size())
+            # print("y_true_rel size:", y_true_rel.size())
 
             sample_avg_disp = []
             sample_final_disp = []
@@ -82,19 +91,21 @@ def evaluate_testset(testset):
             for i in range(samples_to_draw):
 
                 # predict and convert to absolute
-                y_pred_rel = constant_velocity_model(observed, sample=RunConfig.sample)
+                if RunConfig.use_angvel:
+                    y_pred_rel = constant_velocity_model(observed, angvels, sample=RunConfig.sample)
+                else:
+                    y_pred_rel = constant_velocity_model(observed, sample=RunConfig.sample)
                 y_pred_abs = rel_to_abs(y_pred_rel, observed[-1])
                 # print("No Permute:", y_pred_abs)
                 predicted_positions = y_pred_abs.permute(1, 0, 2)
-                # print("Predicted: ", predicted_positions)
-                # print("-------------------")
 
                 # convert true label to absolute
                 y_true_abs = rel_to_abs(y_true_rel, observed[-1])
 
+                # print("Y_true_abs size:", y_true_abs.size())
+                # print("---------")
+
                 true_positions = y_true_abs.permute(1, 0, 2)
-                # print("GT: ", true_positions[0])
-                # print("-------------------")
 
                 # compute errors
                 avg_displacement = avg_disp(predicted_positions, [true_positions, masks])
@@ -109,7 +120,6 @@ def evaluate_testset(testset):
                     trajectories.append({"observed": history, \
                                          "predicted": predicted_positions, \
                                          "true": true_positions})
-
 
             avg_displacement = min(sample_avg_disp)
             final_displacement = min(sample_final_disp)
@@ -141,6 +151,7 @@ def parse_commandline():
     parser = argparse.ArgumentParser(description='Runs an evaluation of the Constant Velocity Model.')
     parser.add_argument('--sample', default=RunConfig.sample, action='store_true', help='Turns on the sampling for the CVM (OUR-S).')
     parser.add_argument('--make_plot', default=RunConfig.make_plot, action="store", help='Generate plot for specified frameID')
+    parser.add_argument("--use_angvel", default=RunConfig.use_angvel, action="store_true", help="Use angular velocity in prediction if available.")
     args = parser.parse_args()
     return args
 
@@ -148,10 +159,15 @@ def main():
     args = parse_commandline()
     RunConfig.sample = args.sample
     RunConfig.make_plot = int(args.make_plot)
+    RunConfig.use_angvel = args.use_angvel
     if RunConfig.sample:
         print("Sampling activated.")
     if RunConfig.make_plot != False:
-        print("Plotting activated")
+        print("Plotting activated for detection " + str(RunConfig.make_plot) + ".")
+    if RunConfig.use_angvel:
+        print("Using angular velocity.")
+
+    print("--------------------------")
 
     datasets = load_datasets()
     testset_results = []

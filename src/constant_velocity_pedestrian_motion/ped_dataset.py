@@ -78,6 +78,7 @@ class PedDataset(Dataset):
                 sample = ids_to_samples[obj.id]
                 # print(sample.detectionID)
                 sample.add_position(obj.position)
+                sample.add_angvel(obj.angvel)
         # print(ids_to_samples)
         return ids_to_samples
 
@@ -116,12 +117,14 @@ class PedDataset(Dataset):
         mask = torch.stack(mask)
         self._pad_sequence(sample)
 
-        observed = torch.tensor(sample.trajectory.positions[:self.observed_history], dtype=torch.float32)
+        observed_pos = torch.tensor(sample.trajectory.positions[:self.observed_history], dtype=torch.float32)
         y_trajectory = np.array(sample.trajectory.positions)
         y_delta = y_trajectory[self.observed_history:] - y_trajectory[self.observed_history-1:-1]
         y_delta = torch.tensor(y_delta, dtype=torch.float32)
 
-        return observed, [y_delta, mask]
+        observed_angvels = torch.tensor(sample.trajectory.angvels[:self.observed_history], dtype=torch.float32)
+
+        return [observed_pos, observed_angvels], [y_delta, mask]
 
     def _compute_label_mask(self, sample):
         mask = np.ones(self.sequence_length)

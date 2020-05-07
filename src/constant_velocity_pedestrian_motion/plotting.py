@@ -5,11 +5,13 @@ Christoph Scholler.
 Author: Abbie Lee (abbielee@mit.edu)
 """
 import matplotlib.pyplot as plt
-import imageio
+# import imageio
 
 def plotting(trajectories):
     # output_folder = os.path.join("./plots", dataset_name)
     print(len(trajectories))
+
+    #TODO(abbielee): remove 0.0s from trajectories
 
     for tr in [trajectories[0], trajectories[30]]:
         true = tr["true"][0]
