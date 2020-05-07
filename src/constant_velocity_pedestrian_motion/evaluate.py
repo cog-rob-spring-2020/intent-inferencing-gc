@@ -45,7 +45,6 @@ def constant_velocity_model(observed, angvels=None, sample=False):
     CVM can be run with or without sampling. A call to this function always
     generates one sample if sample option is true.
     """
-    print("Angvels:", angvels)
     obs_rel = observed[1:] - observed[:-1]
     deltas = obs_rel[-1].unsqueeze(0)
     if sample:
