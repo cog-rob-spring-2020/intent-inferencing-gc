@@ -22,12 +22,12 @@ class RunConfig:
     make_plot = False
 
     dataset_paths = [
-                     "./data/eth_univ",
-                     "./data/eth_hotel",
-                     "./data/ucy_zara01",
-                     "./data/ucy_zara02",
-                     "./data/ucy_univ"
-                    ]
+                     "./data/eth_univ"]
+                    #  "./data/eth_hotel",
+                    #  "./data/ucy_zara01",
+                    #  "./data/ucy_zara02",
+                    #  "./data/ucy_univ"
+                    # ]
     dataset_paths = ["./data/CARLA2"]
                      # "./data/CARLA2",
                      # "./data/CARLA3"]
@@ -56,19 +56,23 @@ def constant_velocity_model(observed, sample=False):
     return y_pred_rel
 
 def evaluate_testset(testset):
-    testset_loader = Data.DataLoader(dataset=testset, batch_size=1, shuffle=True)
+    testset_loader = Data.DataLoader(dataset=testset, batch_size=1, shuffle=False)
 
     with torch.no_grad():
 
         avg_displacements =  []
         final_displacements = []
         trajectories = []
+
         for seq_id, (batch_x, batch_y) in enumerate(testset_loader):
+            detectionID = testset.samples[seq_id].detectionID
+            # print("DectectionID:", detectionID)
             # print("Seq ID: ", seq_id)
             # print("batch X", batch_x)
             # print("batch Y", batch_y)
             # print("-----------------")
             observed = batch_x.permute(1, 0, 2)
+            history = observed.permute(1, 0, 2)
             y_true_rel, masks = batch_y
             y_true_rel = y_true_rel.permute(1, 0, 2)
 
@@ -80,8 +84,10 @@ def evaluate_testset(testset):
                 # predict and convert to absolute
                 y_pred_rel = constant_velocity_model(observed, sample=RunConfig.sample)
                 y_pred_abs = rel_to_abs(y_pred_rel, observed[-1])
+                # print("No Permute:", y_pred_abs)
                 predicted_positions = y_pred_abs.permute(1, 0, 2)
-                # print("Predicted: ", predicted_positions[0])
+                # print("Predicted: ", predicted_positions)
+                # print("-------------------")
 
                 # convert true label to absolute
                 y_true_abs = rel_to_abs(y_true_rel, observed[-1])
@@ -98,9 +104,11 @@ def evaluate_testset(testset):
 
                 # batch = (observed, y_true_abs, obs_traj_rel, y_true_rel,
                 # None, None, seq_start_end)
-
-                trajectories.append({"predicted": predicted_positions[0], \
-                                     "true": true_positions[0]})
+                if detectionID == RunConfig.make_plot:
+                    # print("Saving trajectories for DectectionID:", detectionID)
+                    trajectories.append({"observed": history, \
+                                         "predicted": predicted_positions, \
+                                         "true": true_positions})
 
 
             avg_displacement = min(sample_avg_disp)
@@ -111,7 +119,7 @@ def evaluate_testset(testset):
         avg_displacements = np.mean(avg_displacements)
         final_displacements = np.mean(final_displacements)
 
-        if RunConfig.make_plots:
+        if RunConfig.make_plot:
             return avg_displacements, final_displacements, trajectories
         else:
             return avg_displacements, final_displacements, None
@@ -139,10 +147,10 @@ def parse_commandline():
 def main():
     args = parse_commandline()
     RunConfig.sample = args.sample
-    RunConfig.make_plots = args.make_plot
+    RunConfig.make_plot = int(args.make_plot)
     if RunConfig.sample:
         print("Sampling activated.")
-    if RunConfig.make_plot != None:
+    if RunConfig.make_plot != False:
         print("Plotting activated")
 
     datasets = load_datasets()
@@ -164,7 +172,7 @@ def main():
     print("*ADE: {}".format(total_avg_disp/len(testset_results)))
     print("*FDE: {}".format(total_final_disp/len(testset_results)))
 
-    if RunConfig.make_plots:
+    if RunConfig.make_plot:
         plotting(trajectories)
 
 if __name__ == "__main__":

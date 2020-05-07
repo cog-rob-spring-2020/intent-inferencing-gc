@@ -23,6 +23,7 @@ class PedDataset(Dataset):
         self.observed_history = observed_history
 
         self.detection_timestamps, self.detection_paths = None, None
+        self.detections = None
         self.name = None
         self.samples = []
         self.size = 0
@@ -43,7 +44,7 @@ class PedDataset(Dataset):
 
     def __len__(self):
         return self.size
-        
+
     def _ordered_timestamp_detection_paths(self, detection_paths):
         ordered_detections = []
         for detection_path in detection_paths:
@@ -67,13 +68,17 @@ class PedDataset(Dataset):
         ids_to_samples = dict()
 
         for detection in detections:
+            # print(detection.detectionID)
             timestamp = detection.timestamp
 
+            # Doesn't create samples for all detections
             for obj in detection.objects():
                 if obj.id not in ids_to_samples:
-                    ids_to_samples[obj.id] = Sample(obj.id, timestamp)
+                    ids_to_samples[obj.id] = Sample(obj.id, timestamp, detectionID=detection.detectionID)
                 sample = ids_to_samples[obj.id]
+                # print(sample.detectionID)
                 sample.add_position(obj.position)
+        # print(ids_to_samples)
         return ids_to_samples
 
     def _load_all_detections(self):
@@ -81,12 +86,19 @@ class PedDataset(Dataset):
         for detection_path in self.detection_paths:
             detection = self._load_detection(detection_path)
             detections.append(detection)
+        self.detections = detections
         return detections
 
     def _load_detection(self, detection_path):
         with  open(detection_path, 'r') as detection_file:
             detection_json = json.load(detection_file)
-        detection = Detection.from_json(detection_json)
+
+        # Get ID from filename
+        fname = os.path.basename(detection_path)
+        idx = fname.find(".txt")
+        ID = int(''.join([c for c in fname[:idx] if c.isdigit()]))
+
+        detection = Detection.from_json(detection_json, ID=ID)
         return detection
 
     def _slice_samples_by_sequence_length(self):
