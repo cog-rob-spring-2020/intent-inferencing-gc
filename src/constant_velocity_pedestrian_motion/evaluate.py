@@ -19,8 +19,10 @@ class RunConfig:
     num_samples = 20
     sample_angle_std = 25
 
-    make_plot = False
     use_angvel = False # considers angular velocity in calculation
+
+    make_plot = False
+    save_gif = False
 
     dataset_paths = [
                      "./data/eth_univ"]
@@ -29,7 +31,8 @@ class RunConfig:
                     #  "./data/ucy_zara02",
                     #  "./data/ucy_univ"
                     # ]
-    dataset_paths = ["./data/CARLA2"]
+    dataset_paths = ["./data/CARLAmini"]
+                     # "./data/CARLA2",
                      # "./data/CARLA2",
                      # "./data/CARLA3"]
 
@@ -63,15 +66,13 @@ def evaluate_testset(testset):
 
         avg_displacements =  []
         final_displacements = []
-        trajectories = []
+        dID_to_trajectories = {} # detection ID to all the trajectories in that detection
 
         for seq_id, (batch_x, batch_y) in enumerate(testset_loader):
             detectionID = testset.samples[seq_id].detectionID
-            # print("DectectionID:", detectionID)
-            # print("Seq ID: ", seq_id)
-            # print("batch X", batch_x)
-            # print("batch Y", batch_y)
-            # print("-----------------")
+
+            timestep = testset.samples[seq_id].trajectory.timestamps[RunConfig.observed_history-1]
+
             obs_pos, obs_angvels = batch_x
             observed = obs_pos.permute(1, 0, 2)
             history = observed.permute(1, 0, 2)
@@ -79,10 +80,6 @@ def evaluate_testset(testset):
             y_true_rel, masks = batch_y
             y_true_rel = y_true_rel.permute(1, 0, 2)
 
-            # print("Obs_pos size:", obs_pos.size())
-            # print("Observed size:", observed.size())
-            # print("History size:", history.size())
-            # print("y_true_rel size:", y_true_rel.size())
 
             sample_avg_disp = []
             sample_final_disp = []
@@ -95,15 +92,10 @@ def evaluate_testset(testset):
                 else:
                     y_pred_rel = constant_velocity_model(observed, sample=RunConfig.sample)
                 y_pred_abs = rel_to_abs(y_pred_rel, observed[-1])
-                # print("No Permute:", y_pred_abs)
                 predicted_positions = y_pred_abs.permute(1, 0, 2)
 
                 # convert true label to absolute
                 y_true_abs = rel_to_abs(y_true_rel, observed[-1])
-
-                # print("Y_true_abs size:", y_true_abs.size())
-                # print("---------")
-
                 true_positions = y_true_abs.permute(1, 0, 2)
 
                 # compute errors
@@ -112,26 +104,27 @@ def evaluate_testset(testset):
                 sample_avg_disp.append(avg_displacement)
                 sample_final_disp.append(final_displacement)
 
-                # batch = (observed, y_true_abs, obs_traj_rel, y_true_rel,
-                # None, None, seq_start_end)
-                if detectionID == RunConfig.make_plot:
-                    # print("Saving trajectories for DectectionID:", detectionID)
-                    trajectories.append({"observed": history, \
-                                         "predicted": predicted_positions, \
-                                         "true": true_positions})
+                if len(RunConfig.dataset_paths) == 1:
+                    trajectories = {"observed": history, \
+                                    "predicted": predicted_positions, \
+                                    "true": true_positions, "ts": timestep}
+
+                    if detectionID not in dID_to_trajectories.keys():
+                        dID_to_trajectories[detectionID] = []
+
+                    dID_to_trajectories[detectionID].append(trajectories)
 
             avg_displacement = min(sample_avg_disp)
             final_displacement = min(sample_final_disp)
             avg_displacements.append(avg_displacement)
             final_displacements.append(final_displacement)
 
+        print("Total:", seq_id)
         avg_displacements = np.mean(avg_displacements)
         final_displacements = np.mean(final_displacements)
 
-        if RunConfig.make_plot:
-            return avg_displacements, final_displacements, trajectories
-        else:
-            return avg_displacements, final_displacements, None
+
+        return avg_displacements, final_displacements, dID_to_trajectories
 
 def load_datasets():
     datasets = []
@@ -151,6 +144,7 @@ def parse_commandline():
     parser.add_argument('--sample', default=RunConfig.sample, action='store_true', help='Turns on the sampling for the CVM (OUR-S).')
     parser.add_argument('--make_plot', default=RunConfig.make_plot, action="store", help='Generate plot for specified frameID')
     parser.add_argument("--use_angvel", default=RunConfig.use_angvel, action="store_true", help="Use angular velocity in prediction if available.")
+    parser.add_argument("--save_gif", default=RunConfig.save_gif, action="store", help="Save gif to fname.")
     args = parser.parse_args()
     return args
 
@@ -158,11 +152,14 @@ def main():
     args = parse_commandline()
     RunConfig.sample = args.sample
     RunConfig.make_plot = int(args.make_plot)
+    RunConfig.save_gif = args.save_gif
     RunConfig.use_angvel = args.use_angvel
     if RunConfig.sample:
         print("Sampling activated.")
     if RunConfig.make_plot != False:
         print("Plotting activated for detection " + str(RunConfig.make_plot) + ".")
+    if RunConfig.save_gif != False:
+        print("Saving GIF to " + RunConfig.save_gif)
     if RunConfig.use_angvel:
         print("Using angular velocity.")
 
@@ -172,7 +169,7 @@ def main():
     testset_results = []
     for i, testset in enumerate(datasets):
         print("Evaluating testset {}".format(testset.name))
-        avg_displacements, final_displacements, trajectories = evaluate_testset(testset)
+        avg_displacements, final_displacements, dID_to_trajectories = evaluate_testset(testset)
         testset_results.append([testset.name, avg_displacements, final_displacements])
 
     print("\n== Results for testset evaluations ==")
@@ -187,8 +184,14 @@ def main():
     print("*ADE: {}".format(total_avg_disp/len(testset_results)))
     print("*FDE: {}".format(total_final_disp/len(testset_results)))
 
-    if RunConfig.make_plot:
-        plotting(trajectories)
+    if len(RunConfig.dataset_paths) == 1:
+        if RunConfig.make_plot:
+            trajectories = dID_to_trajectories[RunConfig.make_plot]
+            plotting(trajectories)
+
+        if RunConfig.save_gif:
+            trajectories = [dID_to_trajectories[i] for i in sorted(dID_to_trajectories.keys())]
+            plotting_gif(trajectories, RunConfig.save_gif)
 
 if __name__ == "__main__":
     main()
