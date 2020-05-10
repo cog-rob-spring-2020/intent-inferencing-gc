@@ -7,22 +7,23 @@ Author: Abbie Lee (abbielee@mit.edu)
 import numpy as np
 import matplotlib.pyplot as plt
 import gif
+from tqdm import tqdm
 
 im = plt.imread("CARLA.jpg")
 
 def gen_frame(detection_trajs):
 
-    xlim = [99, 171]
-    ylim = [-230, -170]
+    xlim = [99.1, 171.1]
+    ylim = [230, 170]
 
-    fig, ax = plt.subplots(figsize=(14, 12))
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=80)
     # set background
-    y_offset = 4
+    y_offset = -4
     ax.imshow(im, extent=[xlim[0], xlim[1], ylim[0]+y_offset, ylim[1]+y_offset])
 
     ax.tick_params(labelsize=14)
-    ax.tick_params(labelsize=14)
-    ax.tick_params(labelsize=14)
+    # ax.tick_params(labelsize=14)
+    # ax.tick_params(labelsize=14)
     ax.set_xlabel("X", fontsize=16)
     ax.set_ylabel("Y", fontsize=16)
     ax.set_xlim(xlim[0], xlim[1])
@@ -34,28 +35,23 @@ def gen_frame(detection_trajs):
         hist = trajectory["observed"][0]
         ts = trajectory["ts"]
 
-        # mirror over x axis
-        true[:,1] = -true[:,1]
-        pred[:,1] = -pred[:,1]
-        hist[:,1] = -hist[:,1]
-
         # find out of bounds points and delete
         true_idxs = []
         for i in range(true.shape[0]):
             if true[i, 0] < xlim[0] or true[i, 0] > xlim[1] or \
-               true[i, 1] < ylim[0] or true[i, 1] > ylim[1]:
+               true[i, 1] < ylim[1] or true[i, 1] > ylim[0]:
                 true_idxs.append(i)
 
         pred_idxs = []
         for i in range(pred.shape[0]):
             if pred[i, 0] < xlim[0] or pred[i, 0] > xlim[1] or \
-               pred[i, 1] < ylim[0] or pred[i, 1] > ylim[1]:
+               pred[i, 1] < ylim[1] or pred[i, 1] > ylim[0]:
                 pred_idxs.append(i)
 
         hist_idxs = []
         for i in range(hist.shape[0]):
             if hist[i, 0] < xlim[0] or hist[i, 0] > xlim[1] or \
-               hist[i, 1] < ylim[0] or hist[i, 1] > ylim[1]:
+               hist[i, 1] < ylim[1] or hist[i, 1] > ylim[0]:
                 hist_idxs.append(i)
 
         true = np.delete(true, true_idxs, axis=0)
@@ -72,18 +68,26 @@ def gen_frame(detection_trajs):
             hist = np.array([[0, 0]])
 
         # plot observed_history
-        ax.plot(hist[:,0], hist[:,1], 'o-', color='r', alpha=0.2, label='history')
+        ax.plot(hist[:,0], hist[:,1], 'o', fillstyle="none", color='r', alpha=0.5, markersize=8)
 
         # plot gt
-        ax.plot(true[:,0], true[:,1], 'o-', color='g', alpha=0.4, label='true future')
+        ax.plot(true[:,0], true[:,1], 'o', fillstyle="none", color='g', alpha=0.5, markersize=8)
 
         # plot pred
-        ax.plot(pred[:,0], pred[:,1], 'o-', color='b', alpha=0.1, label='prediction')
+        ax.plot(pred[:,0], pred[:,1], 'o', fillstyle="none", color='b', alpha=0.5, markersize=8)
 
-        # plot connecting points
-        ax.plot(true[0,0], true[0,1], 'o', color='k', alpha=1.0, markersize=8., label="current: " + str(ts))
+        # plot current point
+        ax.plot(true[0,0], true[0,1], 'o', color='k', alpha=1.0, markersize=10)
 
-    ax.legend(["history", "true future", "prediction", "current: " + str(ts)], loc="lower right") # FIX LEGEND
+    # Make legend
+    x, y = [], []
+    l1, = ax.plot(x, y, 'o', fillstyle="none", color='r', alpha=0.5, markersize=8, label='history')
+    l2, = ax.plot(x, y, 'o', color='k', markersize=10, label='current')
+    l3, = ax.plot(x, y, 'o', fillstyle="none", color='g', alpha=0.5, markersize=8, label='true future')
+    l4, = ax.plot(x, y, 'o', fillstyle="none", color='b', alpha=0.5, markersize=8, label='prediction')
+    ax.legend((l1, l2, l3, l4), ("history", "current", "true future", "prediction"), loc="lower right")
+
+    ax.set_title("t = " + str(int(ts)), fontsize=16)
 
 @gif.frame
 def gen_gif_img(ts):
@@ -99,12 +103,19 @@ def plotting_gif(trajectories, outpath):
     outpath: relative path to save gif
     """
     imgs = []
-    for ts in trajectories:
+    for ts in tqdm(trajectories):
         imgs.append(gen_gif_img(ts))
 
     gif.save(imgs, outpath, duration=300)
 
+def plotting_saveimgs(trajectories):
+        counter = 0
+        for ts in tqdm(trajectories):
+            gen_frame(ts)
+            plt.savefig("./plots/%06d.jpg" % counter)
+            plt.close()
+            counter += 1
+
 def plotting(trajectories):
     gen_frame(trajectories)
-    # TODO(abbielee): fix legend
     plt.show()

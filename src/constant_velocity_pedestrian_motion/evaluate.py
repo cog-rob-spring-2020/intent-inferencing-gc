@@ -11,9 +11,10 @@ from plotting import *
 
 
 class RunConfig:
-    sequence_length = 20
+    prediction_horizon = 9
     min_sequence_length = 10
     observed_history = 8
+    sequence_length = observed_history + prediction_horizon
 
     sample = False
     num_samples = 20
@@ -23,6 +24,7 @@ class RunConfig:
 
     make_plot = False
     save_gif = False
+    save_imgs = False
 
     dataset_paths = [
                      "./data/eth_univ"]
@@ -31,7 +33,7 @@ class RunConfig:
                     #  "./data/ucy_zara02",
                     #  "./data/ucy_univ"
                     # ]
-    dataset_paths = ["./data/CARLA4"]
+    dataset_paths = ["./data/CARLA5"]
                      # "./data/CARLA2",
                      # "./data/CARLA2",
                      # "./data/CARLA3"]
@@ -56,7 +58,7 @@ def constant_velocity_model(observed, angvels=None, sample=False):
             c, s = np.cos(theta), np.sin(theta)
             rotation_mat = torch.tensor([[c, s],[-s, c]])
             deltas = torch.t(rotation_mat.matmul(torch.t(deltas.squeeze(dim=0)))).unsqueeze(0)
-    y_pred_rel = deltas.repeat(12, 1, 1)
+    y_pred_rel = deltas.repeat(RunConfig.sequence_length-RunConfig.observed_history, 1, 1)
     return y_pred_rel
 
 def evaluate_testset(testset):
@@ -149,6 +151,7 @@ def parse_commandline():
     parser.add_argument('--make_plot', default=RunConfig.make_plot, action="store", help='Generate plot for specified frameID')
     parser.add_argument("--use_angvel", default=RunConfig.use_angvel, action="store_true", help="Use angular velocity in prediction if available.")
     parser.add_argument("--save_gif", default=RunConfig.save_gif, action="store", help="Save gif to fname.")
+    parser.add_argument("--save_imgs", default=RunConfig.save_imgs, action="store_true", help="Save gif frames to /plots.")
     args = parser.parse_args()
     return args
 
@@ -158,6 +161,7 @@ def main():
     # RunConfig.make_plot = int(args.make_plot)
     RunConfig.make_plot = float(args.make_plot)
     RunConfig.save_gif = args.save_gif
+    RunConfig.save_imgs = args.save_imgs
     RunConfig.use_angvel = args.use_angvel
     if RunConfig.sample:
         print("Sampling activated.")
@@ -165,6 +169,8 @@ def main():
         print("Plotting activated for timestamp " + str(RunConfig.make_plot) + ".")
     if RunConfig.save_gif != False:
         print("Saving GIF to " + RunConfig.save_gif)
+    if RunConfig.save_imgs:
+        print("Saving images for GIF to /plots.")
     if RunConfig.use_angvel:
         print("Using angular velocity.")
 
@@ -200,6 +206,10 @@ def main():
             # trajectories = [dID_to_trajectories[i] for i in sorted(dID_to_trajectories.keys())]
             trajectories = [ts_to_trajectories[i] for i in sorted(ts_to_trajectories.keys())]
             plotting_gif(trajectories, RunConfig.save_gif)
+
+        if RunConfig.save_imgs:
+            trajectories = [ts_to_trajectories[i] for i in sorted(ts_to_trajectories.keys())]
+            plotting_saveimgs(trajectories)
 
 if __name__ == "__main__":
     main()
