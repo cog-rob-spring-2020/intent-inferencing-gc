@@ -31,7 +31,7 @@ class RunConfig:
                     #  "./data/ucy_zara02",
                     #  "./data/ucy_univ"
                     # ]
-    dataset_paths = ["./data/CARLAmini"]
+    dataset_paths = ["./data/CARLA4"]
                      # "./data/CARLA2",
                      # "./data/CARLA2",
                      # "./data/CARLA3"]
@@ -67,11 +67,12 @@ def evaluate_testset(testset):
         avg_displacements =  []
         final_displacements = []
         dID_to_trajectories = {} # detection ID to all the trajectories in that detection
+        ts_to_trajectories = {} # timestamp to ID for all the trajectories with that timestamp
 
         for seq_id, (batch_x, batch_y) in enumerate(testset_loader):
             detectionID = testset.samples[seq_id].detectionID
 
-            timestep = testset.samples[seq_id].trajectory.timestamps[RunConfig.observed_history-1]
+            timestamp = testset.samples[seq_id].trajectory.timestamps[RunConfig.observed_history-1]
 
             obs_pos, obs_angvels = batch_x
             observed = obs_pos.permute(1, 0, 2)
@@ -107,12 +108,16 @@ def evaluate_testset(testset):
                 if len(RunConfig.dataset_paths) == 1:
                     trajectories = {"observed": history, \
                                     "predicted": predicted_positions, \
-                                    "true": true_positions, "ts": timestep}
+                                    "true": true_positions, "ts": timestamp}
 
                     if detectionID not in dID_to_trajectories.keys():
                         dID_to_trajectories[detectionID] = []
 
+                    if timestamp not in ts_to_trajectories.keys():
+                        ts_to_trajectories[timestamp] = []
+
                     dID_to_trajectories[detectionID].append(trajectories)
+                    ts_to_trajectories[timestamp].append(trajectories)
 
             avg_displacement = min(sample_avg_disp)
             final_displacement = min(sample_final_disp)
@@ -123,8 +128,7 @@ def evaluate_testset(testset):
         avg_displacements = np.mean(avg_displacements)
         final_displacements = np.mean(final_displacements)
 
-
-        return avg_displacements, final_displacements, dID_to_trajectories
+        return avg_displacements, final_displacements, ts_to_trajectories # dID_to_trajectories
 
 def load_datasets():
     datasets = []
@@ -151,13 +155,14 @@ def parse_commandline():
 def main():
     args = parse_commandline()
     RunConfig.sample = args.sample
-    RunConfig.make_plot = int(args.make_plot)
+    # RunConfig.make_plot = int(args.make_plot)
+    RunConfig.make_plot = float(args.make_plot)
     RunConfig.save_gif = args.save_gif
     RunConfig.use_angvel = args.use_angvel
     if RunConfig.sample:
         print("Sampling activated.")
     if RunConfig.make_plot != False:
-        print("Plotting activated for detection " + str(RunConfig.make_plot) + ".")
+        print("Plotting activated for timestamp " + str(RunConfig.make_plot) + ".")
     if RunConfig.save_gif != False:
         print("Saving GIF to " + RunConfig.save_gif)
     if RunConfig.use_angvel:
@@ -169,7 +174,8 @@ def main():
     testset_results = []
     for i, testset in enumerate(datasets):
         print("Evaluating testset {}".format(testset.name))
-        avg_displacements, final_displacements, dID_to_trajectories = evaluate_testset(testset)
+        # avg_displacements, final_displacements, dID_to_trajectories = evaluate_testset(testset)
+        avg_displacements, final_displacements, ts_to_trajectories = evaluate_testset(testset)
         testset_results.append([testset.name, avg_displacements, final_displacements])
 
     print("\n== Results for testset evaluations ==")
@@ -186,11 +192,13 @@ def main():
 
     if len(RunConfig.dataset_paths) == 1:
         if RunConfig.make_plot:
-            trajectories = dID_to_trajectories[RunConfig.make_plot]
+            # trajectories = dID_to_trajectories[RunConfig.make_plot]
+            trajectories = ts_to_trajectories[RunConfig.make_plot]
             plotting(trajectories)
 
         if RunConfig.save_gif:
-            trajectories = [dID_to_trajectories[i] for i in sorted(dID_to_trajectories.keys())]
+            # trajectories = [dID_to_trajectories[i] for i in sorted(dID_to_trajectories.keys())]
+            trajectories = [ts_to_trajectories[i] for i in sorted(ts_to_trajectories.keys())]
             plotting_gif(trajectories, RunConfig.save_gif)
 
 if __name__ == "__main__":

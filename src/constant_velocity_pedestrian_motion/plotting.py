@@ -8,20 +8,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 import gif
 
+im = plt.imread("CARLA.jpg")
+
 def gen_frame(detection_trajs):
 
-    xlims = [98, 170]
-    ylims = [170, 230]
+    xlim = [99, 171]
+    ylim = [-230, -170]
 
-    fig, ax = plt.subplots()
-    # plt.rcParams["figure.figsize"] = (7,6)
+    fig, ax = plt.subplots(figsize=(14, 12))
+    # set background
+    y_offset = 4
+    ax.imshow(im, extent=[xlim[0], xlim[1], ylim[0]+y_offset, ylim[1]+y_offset])
+
     ax.tick_params(labelsize=14)
     ax.tick_params(labelsize=14)
     ax.tick_params(labelsize=14)
     ax.set_xlabel("X", fontsize=16)
     ax.set_ylabel("Y", fontsize=16)
-    ax.set_xlim(xlims[0], xlims[1])
-    ax.set_ylim(ylims[0], ylims[1])
+    ax.set_xlim(xlim[0], xlim[1])
+    ax.set_ylim(ylim[0]+y_offset, ylim[1]+y_offset)
 
     for trajectory in detection_trajs:
         true = trajectory["true"][0]
@@ -29,28 +34,56 @@ def gen_frame(detection_trajs):
         hist = trajectory["observed"][0]
         ts = trajectory["ts"]
 
-        # find out of bounds points and delete
-        idxs = []
-        for i in range(true.shape[0]):
-            if true[i, 0] < xlims[0] or true[i, 0] > xlims[1] or \
-               true[i, 1] < ylims[0] or true[i, 1] > ylims[1]:
-                idxs.append(i)
+        # mirror over x axis
+        true[:,1] = -true[:,1]
+        pred[:,1] = -pred[:,1]
+        hist[:,1] = -hist[:,1]
 
-        true = np.delete(true, idxs, axis=0)
+        # find out of bounds points and delete
+        true_idxs = []
+        for i in range(true.shape[0]):
+            if true[i, 0] < xlim[0] or true[i, 0] > xlim[1] or \
+               true[i, 1] < ylim[0] or true[i, 1] > ylim[1]:
+                true_idxs.append(i)
+
+        pred_idxs = []
+        for i in range(pred.shape[0]):
+            if pred[i, 0] < xlim[0] or pred[i, 0] > xlim[1] or \
+               pred[i, 1] < ylim[0] or pred[i, 1] > ylim[1]:
+                pred_idxs.append(i)
+
+        hist_idxs = []
+        for i in range(hist.shape[0]):
+            if hist[i, 0] < xlim[0] or hist[i, 0] > xlim[1] or \
+               hist[i, 1] < ylim[0] or hist[i, 1] > ylim[1]:
+                hist_idxs.append(i)
+
+        true = np.delete(true, true_idxs, axis=0)
+        pred = np.delete(pred, pred_idxs, axis=0)
+        hist = np.delete(hist, hist_idxs, axis=0)
+
+        if 0 in true.shape:
+            true = np.array([[0, 0]])
+
+        if 0 in pred.shape:
+            pred = np.array([[0, 0]])
+
+        if 0 in hist.shape:
+            hist = np.array([[0, 0]])
 
         # plot observed_history
-        ax.plot(hist[:,0], hist[:,1], 'o-', color='grey', alpha=0.2, label='history')
+        ax.plot(hist[:,0], hist[:,1], 'o-', color='r', alpha=0.2, label='history')
 
         # plot gt
-        ax.plot(true[:,0], true[:,1], 'o-', color='g', alpha=0.4, label='ground truth')
+        ax.plot(true[:,0], true[:,1], 'o-', color='g', alpha=0.4, label='true future')
 
         # plot pred
-        ax.plot(pred[:,0], pred[:,1], 'o-', color='red', alpha=0.1, label='prediction')
+        ax.plot(pred[:,0], pred[:,1], 'o-', color='b', alpha=0.1, label='prediction')
 
         # plot connecting points
-        ax.plot(true[0,0], true[0,1], 'o', color='darkblue', alpha=0.6, markersize=8., label="timestep " + str(ts))
+        ax.plot(true[0,0], true[0,1], 'o', color='k', alpha=1.0, markersize=8., label="current: " + str(ts))
 
-    ax.legend() # FIX LEGEND
+    ax.legend(["history", "true future", "prediction", "current: " + str(ts)], loc="lower right") # FIX LEGEND
 
 @gif.frame
 def gen_gif_img(ts):
