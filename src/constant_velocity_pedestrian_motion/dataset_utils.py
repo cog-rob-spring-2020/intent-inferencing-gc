@@ -3,14 +3,15 @@ import json
 
 class DetectedObject:
 
-    def __init__(self, obj_id, position, angvel=0):
+    def __init__(self, obj_id, position, heading=0):
         self.id = obj_id
         self.position = position
-        self.angvel = angvel
+        self.heading = heading
 
     def from_json(obj_json):
         if 'angular velocity' in obj_json.keys():
-            return DetectedObject(obj_json['id'], obj_json['position'], obj_json['angular velocity'])
+            return DetectedObject(obj_json['id'], obj_json['position'], \
+                    obj_json['heading'])
         return DetectedObject(obj_json['id'], obj_json['position'])
 
     def __repr__(self):
@@ -49,18 +50,19 @@ class Detection:
 
 class Trajectory():
 
-    def __init__(self, obj_id, start_time, positions=None, angvels=None, timestamps=None):
+    def __init__(self, obj_id, start_time,
+            positions=None, headings=None, timestamps=None):
         self.obj_id = obj_id
         self.start_time = start_time
         self.positions = [] if positions is None else positions
-        self.angvels = [] if angvels is None else angvels
+        self.headings = [] if headings is None else headings
         self.timestamps = [] if timestamps is None else timestamps
 
     def add_position(self, position):
         self.positions.append(position)
 
-    def add_angvel(self, angvel):
-        self.angvels.append(angvel)
+    def add_heading(self, heading):
+        self.headings.append(heading)
 
     def add_timestamp(self, ts):
         self.timestamps.append(ts)
@@ -73,28 +75,30 @@ class Trajectory():
                "Agent ID: " + str(self.obj_id) + "\n" + \
                "Start Time: " + str(self.start_time) + "\n" + \
                "Positions: " + str(self.positions) + "\n" + \
-               "Angvels: " + str(self.angvels) + "\n" + \
+               "Headings: " + str(self.headings) + "\n" + \
                "Timestamps: " + str(self.timestamps) + "\n" + \
                "Num Positions: " + str(len(self.positions)) + "\n" + \
                "----------------"
 
 class Sample():
-    def __init__(self, obj_id, start_time, positions=None, angvels=None, timestamps=None, detectionID=None):
+    def __init__(self, obj_id, start_time,
+            positions=None, headings=None, timestamps=None, detectionID=None):
         self.trajectory = Trajectory(obj_id, start_time, positions=positions, \
-                                     angvels=angvels, timestamps=timestamps)
+                                     headings=headings, timestamps=timestamps)
         self.detectionID = detectionID # ID of dectection frame that this sample is in
 
     @classmethod
     def from_trajectory(cls, trajectory, detectionID=None):
         return cls(trajectory.obj_id, trajectory.start_time, \
-                   positions=trajectory.positions, angvels=trajectory.angvels, \
+                   positions=trajectory.positions, \
+                   headings=trajectory.headings, \
                    timestamps=trajectory.timestamps, detectionID=detectionID)
 
     def add_position(self, position):
         self.trajectory.add_position(position)
 
-    def add_angvel(self, angvel):
-        self.trajectory.add_angvel(angvel)
+    def add_heading(self, heading):
+        self.trajectory.add_heading(heading)
 
     def add_timestamp(self, ts):
         self.trajectory.add_timestamp(ts)
@@ -104,8 +108,8 @@ class Sample():
         return self.trajectory.positions
 
     @property
-    def angvels(self):
-        return self.trajectory.angvels
+    def headings(self):
+        return self.trajectory.headings
 
     @property
     def timestamps(self):
@@ -143,10 +147,11 @@ class Sample():
 
         # TODO(abbie): make this not hardcoded. 8 is the history length
         while start_index < len(self):
-            new_trajectory = Trajectory(self.obj_id, self.trajectory.start_time + start_index, \
-                                        positions=self.positions[start_index:end_index], \
-                                        angvels=self.angvels[start_index:end_index], \
-                                        timestamps=self.timestamps[start_index:end_index])
+            new_trajectory = Trajectory(
+                    self.obj_id, self.trajectory.start_time + start_index, \
+                    positions=self.positions[start_index:end_index], \
+                    headings=self.headings[start_index:end_index], \
+                    timestamps=self.timestamps[start_index:end_index])
             new_sample = Sample.from_trajectory(new_trajectory, detectionID=curr_detectionID)
             curr_detectionID += 1
             start_index += 1

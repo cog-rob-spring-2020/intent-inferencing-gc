@@ -39,20 +39,60 @@ def rel_to_abs(rel_traj, start_pos):
     abs_traj = displacement + start_pos
     return abs_traj.permute(1, 0, 2)
 
-def constant_velocity_model(observed, angvels=None, sample=False):
+def constant_velocity_model(observed, headings=None, sample=False,
+        from_headings=False, average_thetas=False, damping_factor=0.95):
     """
     CVM can be run with or without sampling. A call to this function always
     generates one sample if sample option is true.
+
+    from_headings: Use headings to generate angular velocities (otherwise use
+    past few positions)
+    average_thetas: Use average of last two theta differences (otherwise
+    extrapolate from last theta difference alone)
+    damping_factor: Discount theta by a factor of damping_factor**i on the
+    ith future timestep
     """
     obs_rel = observed[1:] - observed[:-1]
     deltas = obs_rel[-1].unsqueeze(0)
+    if RunConfig.use_angvel:
+        if from_headings:
+            dthetas = headings[1:] - headings[:-1]
+            theta1 = dthetas[-1]
+            theta2 = dthetas[-2]
+        else:
+            v1 = obs_rel[-1].unsqueeze(0)
+            v2 = obs_rel[-2].unsqueeze(0)
+            v3 = obs_rel[-3].unsqueeze(0)
+            theta1 = np.arctan2(v1[:,:,1], v1[:,:,0]) - \
+                     np.arctan2(v2[:,:,1], v2[:,:,0])
+            theta2 = np.arctan2(v2[:,:,1], v2[:,:,0]) - \
+                     np.arctan2(v3[:,:,1], v3[:,:,0])
+        if average_thetas:
+            theta = (theta1 + theta2)/2
+        else:
+            theta = theta1
+
+        # normalize to range (-pi, pi]
+        if theta > np.pi:
+            theta -= 2*np.pi
+        elif theta <= -np.pi:
+            theta += 2*np.pi
+        # rotation matrix is transposed since deltas are a row vector
+        # [x y] @ R^T = R @ [x \\ y]
+        get_rotation_mat = lambda theta: torch.Tensor(
+                [[[np.cos(theta), np.sin(theta)],
+                  [-np.sin(theta), np.cos(theta)]]])
+        y_pred_rel = [deltas @ get_rotation_mat(theta*i*(damping_factor**i))
+                for i in range(1, RunConfig.prediction_horizon+1)]
+        y_pred_rel = torch.cat(y_pred_rel, 0)
+    else:
+        y_pred_rel = deltas.repeat(RunConfig.prediction_horizon, 1, 1)
     if sample:
             sampled_angle = np.random.normal(0, RunConfig.sample_angle_std, 1)[0]
             theta = (sampled_angle * np.pi)/ 180.
             c, s = np.cos(theta), np.sin(theta)
             rotation_mat = torch.tensor([[c, s],[-s, c]])
             deltas = torch.t(rotation_mat.matmul(torch.t(deltas.squeeze(dim=0)))).unsqueeze(0)
-    y_pred_rel = deltas.repeat(RunConfig.sequence_length-RunConfig.observed_history, 1, 1)
     return y_pred_rel
 
 def evaluate_testset(testset):
@@ -67,10 +107,10 @@ def evaluate_testset(testset):
         for seq_id, (batch_x, batch_y) in enumerate(testset_loader):
             timestamp = testset.samples[seq_id].trajectory.timestamps[RunConfig.observed_history-1]
 
-            obs_pos, obs_angvels = batch_x
+            obs_pos, obs_headings = batch_x
             observed = obs_pos.permute(1, 0, 2)
             history = observed.permute(1, 0, 2)
-            angvels = obs_angvels.permute(1, 0)
+            headings = obs_headings.permute(1, 0)
             y_true_rel, masks = batch_y
             y_true_rel = y_true_rel.permute(1, 0, 2)
 
@@ -82,9 +122,11 @@ def evaluate_testset(testset):
 
                 # predict and convert to absolute
                 if RunConfig.use_angvel:
-                    y_pred_rel = constant_velocity_model(observed, angvels, sample=RunConfig.sample)
+                    y_pred_rel = constant_velocity_model(observed, headings, \
+                            sample=RunConfig.sample)
                 else:
-                    y_pred_rel = constant_velocity_model(observed, sample=RunConfig.sample)
+                    y_pred_rel = constant_velocity_model(observed, \
+                            sample=RunConfig.sample)
                 y_pred_abs = rel_to_abs(y_pred_rel, observed[-1])
                 predicted_positions = y_pred_abs.permute(1, 0, 2)
 
