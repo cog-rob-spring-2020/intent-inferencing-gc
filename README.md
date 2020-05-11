@@ -89,6 +89,6 @@ For a series of stills for each frame in the dataset:
 python evaluate.py --save_imgs path_to_imgdir
 ```
 
-## Trajectron++ trajectory prediction
+## Trajectron++ Trajectory Prediction
 
-TODO
+Since this code needs to be placed within the Trajectron++ file structure to function properly, this code is included in a separate repo. The repo can be found [here](https://github.mit.edu/fishberg/cogrob-trajectron-mods).
