@@ -7,61 +7,116 @@ Author: Abbie Lee (abbielee@mit.edu)
 import numpy as np
 import matplotlib.pyplot as plt
 import gif
+from tqdm import tqdm
 
-@gif.frame
-def gen_img(trajectory):
-    # output_folder = os.path.join("./plots", dataset_name)
+im = plt.imread("background.jpg")
 
-    true = trajectory["true"][0]
-    pred = trajectory["predicted"][0]
-    hist = trajectory["observed"][0]
+def gen_frame(detection_trajs):
+    XI = 98.118385
+    XF = 169.524979
+    YI = 170.196945
+    YF = 226.819290
 
-    # find (0,0) and delete
-    idxs = []
-    for i in range(true.shape[0]):
-        if true[i,:] == [0, 0]:
-            idxs.append(i)
+    xlim = [XI, XF]
+    ylim = [YF, YI]
 
-    true = np.delete(true, idxs, axis=0)
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=80)
+    # set background
+    ax.imshow(im, extent=[xlim[0], xlim[1], ylim[1], ylim[0]])
 
-    fig, ax = plt.subplots()
-    # plt.rcParams["figure.figsize"] = (7,6)
-    ax.tick_params(labelsize=14)
-    ax.tick_params(labelsize=14)
     ax.tick_params(labelsize=14)
     ax.set_xlabel("X", fontsize=16)
     ax.set_ylabel("Y", fontsize=16)
-    ax.set_xlim(98, 170)
-    ax.set_ylim(170, 230)
+    ax.set_xlim(xlim[0], xlim[1])
+    ax.set_ylim(ylim[0], ylim[1])
 
-    # plot observed_history
-    ax.plot(hist[:,0], hist[:,1], 'o-', color='grey', alpha=0.2, label='history')
+    for trajectory in detection_trajs:
+        true = trajectory["true"][0]
+        pred = trajectory["predicted"][0]
+        hist = trajectory["observed"][0]
+        ts = trajectory["ts"]
 
-    # plot gt
-    ax.plot(true[:,0], true[:,1], 'o-', color='g', alpha=0.4, label='ground truth')
+        # find out of bounds points and delete
+        true_idxs = []
+        for i in range(true.shape[0]):
+            if true[i, 0] < xlim[0] or true[i, 0] > xlim[1] or \
+               true[i, 1] < ylim[1] or true[i, 1] > ylim[0]:
+                true_idxs.append(i)
 
-    # plot pred
-    ax.plot(pred[:,0], pred[:,1], 'o-', color='red', alpha=0.1, label='prediction')
+        pred_idxs = []
+        for i in range(pred.shape[0]):
+            if pred[i, 0] < xlim[0] or pred[i, 0] > xlim[1] or \
+               pred[i, 1] < ylim[1] or pred[i, 1] > ylim[0]:
+                pred_idxs.append(i)
 
-    # plot connecting points
-    ax.plot(true[0,0], true[0,1], 'o', color='darkblue', alpha=0.6, markersize=8., label="timestep t")
+        hist_idxs = []
+        for i in range(hist.shape[0]):
+            if hist[i, 0] < xlim[0] or hist[i, 0] > xlim[1] or \
+               hist[i, 1] < ylim[1] or hist[i, 1] > ylim[0]:
+                hist_idxs.append(i)
 
-    ax.legend()
+        true = np.delete(true, true_idxs, axis=0)
+        pred = np.delete(pred, pred_idxs, axis=0)
+        hist = np.delete(hist, hist_idxs, axis=0)
 
-    # fig.canvas.draw()
-    # image = np.frombuffer(fig.canvas.tostring_rgb()) #dtype='uint8')
-    # # image = Image.fromarray(im_array, "RGB")
-    # image  = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-    # ims.append(image)
+        if 0 in true.shape:
+            true = np.array([[0, 0]])
+
+        if 0 in pred.shape:
+            pred = np.array([[0, 0]])
+
+        if 0 in hist.shape:
+            hist = np.array([[0, 0]])
+
+        # plot observed_history
+        ax.plot(hist[:,0], hist[:,1], 'o', fillstyle="none", color='r', alpha=0.5, markersize=8)
+
+        # plot gt
+        ax.plot(true[:,0], true[:,1], 'o', fillstyle="none", color='g', alpha=0.5, markersize=8)
+
+        # plot pred
+        ax.plot(pred[:,0], pred[:,1], 'o', fillstyle="none", color='b', alpha=0.5, markersize=8)
+
+        # plot current point
+        ax.plot(true[0,0], true[0,1], 'o', color='k', alpha=1.0, markersize=10)
+
+    # Make legend
+    x, y = [], []
+    l1, = ax.plot(x, y, 'o', fillstyle="none", color='r', alpha=0.5, markersize=8, label='history')
+    l2, = ax.plot(x, y, 'o', color='k', markersize=10, label='current')
+    l3, = ax.plot(x, y, 'o', fillstyle="none", color='g', alpha=0.5, markersize=8, label='true future')
+    l4, = ax.plot(x, y, 'o', fillstyle="none", color='b', alpha=0.5, markersize=8, label='prediction')
+    ax.legend((l1, l2, l3, l4), ("history", "current", "true future", "prediction"), loc="lower right")
+
+    ax.set_title("t = " + str(int(ts)), fontsize=16)
+
+@gif.frame
+def gen_gif_img(ts):
+    """
+    ts: list of trajectories occuring in timestep ts
+    """
+    gen_frame(ts)
+
+def plotting_gif(trajectories, outpath):
+    """
+    trajectories: list of length number of timesteps, where each timestep is a
+                  list of trajectories in that timestep
+    outpath: relative path to save gif
+    """
+    imgs = []
+    for ts in tqdm(trajectories):
+        imgs.append(gen_gif_img(ts))
+
+    gif.save(imgs, outpath, duration=300)
+
+def plotting_saveimgs(trajectories, outpath):
+    counter = 0
+    for ts in tqdm(trajectories):
+        gen_frame(ts)
+        plt.savefig(outpath + "/%06d.jpg" % counter)
+        plt.close()
+        counter += 1
 
 def plotting(trajectories):
-    imgs = []
-    for tr in trajectories:
-        imgs.append(gen_img(tr))
-
-    gif.save(imgs, "./cvm.gif", duration=150)
-
-    # kwargs_write = {'fps':3.0, 'quantizer':'nq'}
-    # imageio.mimsave('./cvm.gif', images, fps=1)
-    # plt.savefig(os.path.join(output_folder, "{}-{}.png".format(batch_id, j)), bbox_inches='tight', pad_inches=0)
-    # plt.close()
+    gen_frame(trajectories)
+    plt.show()

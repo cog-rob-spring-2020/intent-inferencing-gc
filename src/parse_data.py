@@ -7,6 +7,7 @@ Author: Abbie Lee (abbielee@mit.edu)
 
 import json
 import os
+import argparse
 
 class Agent:
     def __init__(self, fpath, labels = None):
@@ -162,14 +163,29 @@ class MultiAgentScene:
         counter = 1
         frames = sorted(self.frames.values(), key = lambda f : f.frameID)
         for fr in frames:
-            with open(outpath + str(counter) + ".json", mode="w") as json_file:
+            with open(outpath + "data/"+ str(counter) + ".json", mode="w") as json_file:
                 json.dump(fr.to_dict(), json_file)
             counter += 1
 
+        # create dataset info file
+        ds_name = os.path.basename(outpath[:-1])
+        with open(outpath + "dataset_info.json", mode="w") as json_file:
+            json.dump({"dataset_name": ds_name}, json_file)
+
+def parse_commandline():
+    parser = argparse.ArgumentParser(description='Parses .txt from CARLA to .json for use with CVM-based predictors.')
+    parser.add_argument('--data', required=True, action='store', help='Path to .txt data files')
+    parser.add_argument('--outpath', required=True, action='store', help='Path to directory for output files')
+    args = parser.parse_args()
+    return args
+
 if __name__ == "__main__":
-    # TODO(abbielee): add cmd line args for datapaths
-    data_path = "data/carla3_raw/"
-    out_path = "datasets/CARLA3/data/"
+    args = parse_commandline()
+    data_path = args.data
+    out_path = args.outpath
+
+    if out_path[-1] != "/":
+        out_path += "/"
 
     labels = ["frame", "timestamp", "position", "velocity", "heading", \
               "angular velocity", "acceleration", "light status"]

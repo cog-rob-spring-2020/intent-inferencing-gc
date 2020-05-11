@@ -66,20 +66,18 @@ class PedDataset(Dataset):
 
     def _create_samples(self, detections):
         ids_to_samples = dict()
-
         for detection in detections:
             # print(detection.detectionID)
             timestamp = detection.timestamp
 
-            # Doesn't create samples for all detections
+            # Object ID to sample. One sample per obejct
             for obj in detection.objects():
                 if obj.id not in ids_to_samples:
                     ids_to_samples[obj.id] = Sample(obj.id, timestamp, detectionID=detection.detectionID)
                 sample = ids_to_samples[obj.id]
-                # print(sample.detectionID)
                 sample.add_position(obj.position)
                 sample.add_angvel(obj.angvel)
-        # print(ids_to_samples)
+                sample.add_timestamp(detection.timestamp)
         return ids_to_samples
 
     def _load_all_detections(self):
