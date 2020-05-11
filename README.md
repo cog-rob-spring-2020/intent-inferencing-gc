@@ -60,10 +60,6 @@ This data parsing step has already been performed for the example datasets.
 
 All CVM code can be found in the `constant_velocity_pedestrian_motion` folder.
 
-```
-cd constant_velocity_model
-```
->>>>>>> bdc9ddba9c5ac3ae510525243c739b7ac117087d
 To get the ADE and FDE for all of the CARLA datasets:
 ```
 python evaluate.py
