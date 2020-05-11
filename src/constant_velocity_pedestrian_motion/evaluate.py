@@ -26,17 +26,11 @@ class RunConfig:
     save_gif = False
     save_imgs = False
 
-    dataset_paths = [
-                     "./data/eth_univ"]
-                    #  "./data/eth_hotel",
-                    #  "./data/ucy_zara01",
-                    #  "./data/ucy_zara02",
-                    #  "./data/ucy_univ"
-                    # ]
-    dataset_paths = ["./data/CARLA5"]
-                     # "./data/CARLA2",
-                     # "./data/CARLA2",
-                     # "./data/CARLA3"]
+    dataset_paths = ["../datasets/CARLA_long",
+                     "../datasets/CARLA_short",
+                     "../datasets/leftturn",
+                     "../datasets/rightturn"]
+    dataset_paths = ["../datasets/CARLA_long"]
 
 def rel_to_abs(rel_traj, start_pos):
     rel_traj = rel_traj.permute(1, 0, 2)
@@ -68,12 +62,9 @@ def evaluate_testset(testset):
 
         avg_displacements =  []
         final_displacements = []
-        dID_to_trajectories = {} # detection ID to all the trajectories in that detection
         ts_to_trajectories = {} # timestamp to ID for all the trajectories with that timestamp
 
         for seq_id, (batch_x, batch_y) in enumerate(testset_loader):
-            detectionID = testset.samples[seq_id].detectionID
-
             timestamp = testset.samples[seq_id].trajectory.timestamps[RunConfig.observed_history-1]
 
             obs_pos, obs_angvels = batch_x
@@ -112,13 +103,9 @@ def evaluate_testset(testset):
                                     "predicted": predicted_positions, \
                                     "true": true_positions, "ts": timestamp}
 
-                    if detectionID not in dID_to_trajectories.keys():
-                        dID_to_trajectories[detectionID] = []
-
                     if timestamp not in ts_to_trajectories.keys():
                         ts_to_trajectories[timestamp] = []
 
-                    dID_to_trajectories[detectionID].append(trajectories)
                     ts_to_trajectories[timestamp].append(trajectories)
 
             avg_displacement = min(sample_avg_disp)
@@ -148,17 +135,16 @@ def load_datasets():
 def parse_commandline():
     parser = argparse.ArgumentParser(description='Runs an evaluation of the Constant Velocity Model.')
     parser.add_argument('--sample', default=RunConfig.sample, action='store_true', help='Turns on the sampling for the CVM (OUR-S).')
-    parser.add_argument('--make_plot', default=RunConfig.make_plot, action="store", help='Generate plot for specified frameID')
+    parser.add_argument('--make_plot', default=RunConfig.make_plot, action="store", help='Generate plot for specified timestamp')
     parser.add_argument("--use_angvel", default=RunConfig.use_angvel, action="store_true", help="Use angular velocity in prediction if available.")
     parser.add_argument("--save_gif", default=RunConfig.save_gif, action="store", help="Save gif to fname.")
-    parser.add_argument("--save_imgs", default=RunConfig.save_imgs, action="store_true", help="Save gif frames to /plots.")
+    parser.add_argument("--save_imgs", default=RunConfig.save_imgs, action="store", help="Save gif frames to dirpath.")
     args = parser.parse_args()
     return args
 
 def main():
     args = parse_commandline()
     RunConfig.sample = args.sample
-    # RunConfig.make_plot = int(args.make_plot)
     RunConfig.make_plot = float(args.make_plot)
     RunConfig.save_gif = args.save_gif
     RunConfig.save_imgs = args.save_imgs
@@ -169,8 +155,8 @@ def main():
         print("Plotting activated for timestamp " + str(RunConfig.make_plot) + ".")
     if RunConfig.save_gif != False:
         print("Saving GIF to " + RunConfig.save_gif)
-    if RunConfig.save_imgs:
-        print("Saving images for GIF to /plots.")
+    if RunConfig.save_imgs != False:
+        print("Saving images for GIF to " + RunConfig.save_imgs + ". ")
     if RunConfig.use_angvel:
         print("Using angular velocity.")
 
@@ -180,7 +166,6 @@ def main():
     testset_results = []
     for i, testset in enumerate(datasets):
         print("Evaluating testset {}".format(testset.name))
-        # avg_displacements, final_displacements, dID_to_trajectories = evaluate_testset(testset)
         avg_displacements, final_displacements, ts_to_trajectories = evaluate_testset(testset)
         testset_results.append([testset.name, avg_displacements, final_displacements])
 
@@ -198,18 +183,21 @@ def main():
 
     if len(RunConfig.dataset_paths) == 1:
         if RunConfig.make_plot:
-            # trajectories = dID_to_trajectories[RunConfig.make_plot]
             trajectories = ts_to_trajectories[RunConfig.make_plot]
             plotting(trajectories)
 
         if RunConfig.save_gif:
-            # trajectories = [dID_to_trajectories[i] for i in sorted(dID_to_trajectories.keys())]
             trajectories = [ts_to_trajectories[i] for i in sorted(ts_to_trajectories.keys())]
             plotting_gif(trajectories, RunConfig.save_gif)
 
-        if RunConfig.save_imgs:
+        if RunConfig.save_imgs != False:
             trajectories = [ts_to_trajectories[i] for i in sorted(ts_to_trajectories.keys())]
-            plotting_saveimgs(trajectories)
+
+            try:
+                os.mkdir(RunConfig.save_imgs)
+            except:
+                pass
+            plotting_saveimgs(trajectories, RunConfig.save_imgs)
 
 if __name__ == "__main__":
     main()

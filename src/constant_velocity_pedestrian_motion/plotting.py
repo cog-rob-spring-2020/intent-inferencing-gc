@@ -9,25 +9,26 @@ import matplotlib.pyplot as plt
 import gif
 from tqdm import tqdm
 
-im = plt.imread("CARLA.jpg")
+im = plt.imread("background.jpg")
 
 def gen_frame(detection_trajs):
+    XI = 98.118385
+    XF = 169.524979
+    YI = 170.196945
+    YF = 226.819290
 
-    xlim = [99.1, 171.1]
-    ylim = [230, 170]
+    xlim = [XI, XF]
+    ylim = [YF, YI]
 
     fig, ax = plt.subplots(figsize=(8, 6), dpi=80)
     # set background
-    y_offset = -4
-    ax.imshow(im, extent=[xlim[0], xlim[1], ylim[0]+y_offset, ylim[1]+y_offset])
+    ax.imshow(im, extent=[xlim[0], xlim[1], ylim[1], ylim[0]])
 
     ax.tick_params(labelsize=14)
-    # ax.tick_params(labelsize=14)
-    # ax.tick_params(labelsize=14)
     ax.set_xlabel("X", fontsize=16)
     ax.set_ylabel("Y", fontsize=16)
     ax.set_xlim(xlim[0], xlim[1])
-    ax.set_ylim(ylim[0]+y_offset, ylim[1]+y_offset)
+    ax.set_ylim(ylim[0], ylim[1])
 
     for trajectory in detection_trajs:
         true = trajectory["true"][0]
@@ -108,13 +109,13 @@ def plotting_gif(trajectories, outpath):
 
     gif.save(imgs, outpath, duration=300)
 
-def plotting_saveimgs(trajectories):
-        counter = 0
-        for ts in tqdm(trajectories):
-            gen_frame(ts)
-            plt.savefig("./plots/%06d.jpg" % counter)
-            plt.close()
-            counter += 1
+def plotting_saveimgs(trajectories, outpath):
+    counter = 0
+    for ts in tqdm(trajectories):
+        gen_frame(ts)
+        plt.savefig(outpath + "/%06d.jpg" % counter)
+        plt.close()
+        counter += 1
 
 def plotting(trajectories):
     gen_frame(trajectories)
