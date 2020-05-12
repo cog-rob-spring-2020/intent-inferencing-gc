@@ -91,4 +91,4 @@ python evaluate.py --save_imgs path_to_imgdir
 
 ## Trajectron++ Trajectory Prediction
 
-Since this code needs to be placed within the Trajectron++ file structure to function properly, this code is included in a separate repo. The repo can be found [here](https://github.mit.edu/fishberg/cogrob-trajectron-mods).
+Since this code needs to be placed within the Trajectron++ file structure to function properly, this code is included in a separate repo. The repo can be found [here](https://github.com/fishberg/cogrob-trajectron-mods).
